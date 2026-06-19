@@ -4,6 +4,7 @@ from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from app.core.camera_metadata import extract_exif_camera, lookup_camera_cfa
 from app.core.hue import AnalysisOptions, analyze_image, generate_synthetic_sample, image_to_data_url, load_rgb_image
 
 app = FastAPI(title="CFA Hue Modification Reproduction", version="0.1.0")
@@ -37,8 +38,19 @@ async def analyze(
         return JSONResponse({"detail": "block_size must be between 16 and 256"}, status_code=400)
 
     data = await file.read()
+    camera = lookup_camera_cfa(extract_exif_camera(data))
     rgb = load_rgb_image(data)
-    result = analyze_image(rgb, AnalysisOptions(ds=ds, block_size=block_size, cfa_green_mode=cfa_green_mode))  # type: ignore[arg-type]
+    preferred_mode = camera["green_mode"] if cfa_green_mode == "AUTO" else None
+    result = analyze_image(
+        rgb,
+        AnalysisOptions(
+            ds=ds,
+            block_size=block_size,
+            cfa_green_mode=cfa_green_mode,  # type: ignore[arg-type]
+            preferred_cfa_green_mode=preferred_mode,  # type: ignore[arg-type]
+        ),
+    )
+    result["camera"] = camera
     return JSONResponse(result)
 
 

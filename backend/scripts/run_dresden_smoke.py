@@ -5,7 +5,8 @@ import json
 import time
 from pathlib import Path
 
-from app.core.hue import angular_error, estimate_from_curves, load_rgb_image, ratio_curves, shift_hue_hsi
+from app.core.camera_metadata import extract_exif_camera, lookup_camera_cfa
+from app.core.hue import angular_error, estimate_cfa_green_mode, estimate_from_curves, load_rgb_image, ratio_curves, shift_hue_hsi
 
 
 def parse_args() -> argparse.Namespace:
@@ -28,10 +29,14 @@ def main() -> None:
     started = time.time()
     rows = []
     for path in files:
-        rgb = load_rgb_image(path.read_bytes(), max_side=args.max_side)
+        data = path.read_bytes()
+        camera = lookup_camera_cfa(extract_exif_camera(data))
+        rgb = load_rgb_image(data, max_side=args.max_side)
+        image_prediction = estimate_cfa_green_mode(rgb)
+        mode = str(camera["green_mode"] or image_prediction["mode"] or args.mode)
         shifted = shift_hue_hsi(rgb, args.known_shift)
-        original_estimate = estimate_from_curves(ratio_curves(rgb, args.ds), args.mode)
-        shifted_estimate = estimate_from_curves(ratio_curves(shifted, args.ds), args.mode)
+        original_estimate = estimate_from_curves(ratio_curves(rgb, args.ds), mode)  # type: ignore[arg-type]
+        shifted_estimate = estimate_from_curves(ratio_curves(shifted, args.ds), mode)  # type: ignore[arg-type]
         original_hue = float(original_estimate["estimated_hue"])
         shifted_hue = float(shifted_estimate["estimated_hue"])
         delta = (shifted_hue - original_hue) % 360.0
@@ -39,6 +44,14 @@ def main() -> None:
             {
                 "camera": path.parent.name,
                 "file": path.name,
+                "exif_make": camera["make"],
+                "exif_model": camera["model"],
+                "bayer_pattern": camera["bayer_pattern"],
+                "green_mode": mode,
+                "green_mode_source": "camera_spec" if camera["green_mode"] else "image_estimate",
+                "image_estimate_confidence": round(float(image_prediction["confidence"]) * 100, 2),
+                "image_estimate_reliability": image_prediction["reliability"],
+                "cfa_lookup_status": camera["lookup_status"],
                 "size": f"{rgb.shape[1]}x{rgb.shape[0]}",
                 "original_estimated_hue": round(original_hue, 1),
                 "shifted_estimated_hue": round(shifted_hue, 1),
@@ -65,4 +78,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

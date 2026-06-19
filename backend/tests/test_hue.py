@@ -4,6 +4,7 @@ import numpy as np
 from fastapi.testclient import TestClient
 from PIL import Image
 
+from app.core.camera_metadata import bayer_to_green_mode, lookup_camera_cfa, normalize_camera_key
 from app.core.hue import (
     AnalysisOptions,
     aivc_counts,
@@ -40,6 +41,20 @@ def test_estimation_uses_expected_green_pattern_extrema() -> None:
     ]
     assert estimate_from_curves(curves, "GXXG")["estimated_hue"] == 240.0
     assert estimate_from_curves(curves, "XGGX")["estimated_hue"] == 120.0
+
+
+def test_known_camera_cfa_lookup_resolves_green_mode() -> None:
+    camera = {
+        "make": "NIKON CORPORATION",
+        "model": "NIKON D200",
+        "software": "",
+        "normalized_key": normalize_camera_key("NIKON CORPORATION", "NIKON D200"),
+    }
+    spec = lookup_camera_cfa(camera)
+    assert spec["lookup_status"] == "known"
+    assert spec["bayer_pattern"] == "RGGB"
+    assert spec["green_mode"] == "XGGX"
+    assert bayer_to_green_mode("GBRG") == "GXXG"
 
 
 def test_cfa_green_mode_prediction_reports_mode_and_confidence() -> None:

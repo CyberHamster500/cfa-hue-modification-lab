@@ -8,6 +8,8 @@ from typing import Literal
 import numpy as np
 from PIL import Image, ImageDraw
 
+from app.core.camera_metadata import GreenMode
+
 CfaGreenMode = Literal["GXXG", "XGGX"]
 CfaGreenModeInput = Literal["AUTO", "GXXG", "XGGX"]
 
@@ -17,6 +19,7 @@ class AnalysisOptions:
     ds: int = 5
     block_size: int = 32
     cfa_green_mode: CfaGreenModeInput = "AUTO"
+    preferred_cfa_green_mode: GreenMode | None = None
 
 
 def load_rgb_image(data: bytes, max_side: int = 768) -> np.ndarray:
@@ -201,7 +204,9 @@ def estimate_from_curves(curves: list[dict[str, float]], mode: CfaGreenMode) -> 
 def analyze_image(rgb: np.ndarray, options: AnalysisOptions) -> dict:
     cfa_prediction = estimate_cfa_green_mode(rgb)
     resolved_mode = (
-        str(cfa_prediction["mode"]) if options.cfa_green_mode == "AUTO" else options.cfa_green_mode
+        options.preferred_cfa_green_mode
+        if options.cfa_green_mode == "AUTO" and options.preferred_cfa_green_mode
+        else str(cfa_prediction["mode"]) if options.cfa_green_mode == "AUTO" else options.cfa_green_mode
     )
     curves = ratio_curves(rgb, options.ds)
     estimate = estimate_from_curves(curves, resolved_mode)  # type: ignore[arg-type]
@@ -214,6 +219,7 @@ def analyze_image(rgb: np.ndarray, options: AnalysisOptions) -> dict:
             "block_size": int(options.block_size),
             "cfa_green_mode": options.cfa_green_mode,
             "resolved_cfa_green_mode": resolved_mode,
+            "cfa_resolution_source": "camera_spec" if options.cfa_green_mode == "AUTO" and options.preferred_cfa_green_mode else "image_estimate" if options.cfa_green_mode == "AUTO" else "manual",
         },
         "cfa_prediction": cfa_prediction,
         "estimate": estimate,

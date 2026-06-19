@@ -42,6 +42,7 @@
 - 각 후보 이미지의 R/G/B 채널에 대해 cross-neighbor AIVC counting을 수행합니다.
 - 2x2 CFA 위치별 count ratio인 `Rr`, `Gr`, `Br` curve를 계산합니다.
 - `AUTO` 모드에서는 AIVC count parity로 `GXXG`/`XGGX` green CFA mode를 추정하고 confidence를 반환합니다.
+- EXIF `Make`/`Model`을 읽어 알려진 카메라의 Bayer CFA pattern을 우선 표시합니다.
 - `GXXG` 패턴은 `Gr` 최대 위치, `XGGX` 패턴은 `Gr` 최소 위치를 기준으로 hue shift를 추정합니다.
 - 이미지를 block 단위로 나누어 변조 위치를 heatmap으로 시각화합니다.
 
@@ -50,20 +51,25 @@
 ## Method Overview
 
 1. 입력 이미지를 RGB로 정규화합니다.
-2. hue 후보를 `0..359` 범위에서 `Ds` 간격으로 이동합니다.
-3. 각 hue 후보 이미지의 R/G/B 채널에서 AIVC count를 계산합니다.
-4. 2x2 CFA parity별 count ratio를 이용해 `Rr`, `Gr`, `Br` curve를 만듭니다.
-5. green CFA mode가 `GXXG`이면 `Gr` 최대 위치를, `XGGX`이면 `Gr` 최소 위치를 찾습니다.
-6. 찾은 위치 `Hm`으로부터 `He = (360 - Hm) mod 360`을 계산합니다.
-7. block 단위로 같은 과정을 반복해 변조 위치를 heatmap으로 표시합니다.
+2. EXIF `Make`/`Model`을 읽고 known camera CFA table에서 Bayer pattern을 찾습니다.
+3. 스펙을 찾으면 full Bayer pattern을 green CFA mode로 변환하고, 없으면 image-based Auto CFA estimate를 사용합니다.
+4. hue 후보를 `0..359` 범위에서 `Ds` 간격으로 이동합니다.
+5. 각 hue 후보 이미지의 R/G/B 채널에서 AIVC count를 계산합니다.
+6. 2x2 CFA parity별 count ratio를 이용해 `Rr`, `Gr`, `Br` curve를 만듭니다.
+7. green CFA mode가 `GXXG`이면 `Gr` 최대 위치를, `XGGX`이면 `Gr` 최소 위치를 찾습니다.
+8. 찾은 위치 `Hm`으로부터 `He = (360 - Hm) mod 360`을 계산합니다.
+9. block 단위로 같은 과정을 반복해 변조 위치를 heatmap으로 표시합니다.
 
 ```mermaid
 flowchart LR
-  A["Input RGB image"] --> B["Hue shift candidates"]
-  B --> C["AIVC counting per RGB channel"]
-  C --> D["Rr / Gr / Br ratio curves"]
-  D --> E["Estimate hue modification"]
-  D --> F["Block heatmap"]
+  A["Input image"] --> B["Read EXIF Make/Model"]
+  B --> C["Camera CFA spec lookup"]
+  C --> D["Resolve GXXG/XGGX mode"]
+  D --> E["Hue shift candidates"]
+  E --> F["AIVC counting per RGB channel"]
+  F --> G["Rr / Gr / Br ratio curves"]
+  G --> H["Estimate hue modification"]
+  G --> I["Block heatmap"]
 ```
 
 ## 데모 화면
@@ -83,6 +89,8 @@ frontend/
   src/styles.css              연구 도구형 UI 스타일
 docs/screenshots/             데모 화면 캡처
 ```
+
+카메라별 CFA pattern lookup 정책과 현재 curated table은 [docs/CAMERA_CFA_PATTERNS.md](docs/CAMERA_CFA_PATTERNS.md)에 정리되어 있습니다.
 
 ## 실행 방법
 
@@ -160,7 +168,7 @@ Form fields:
 - `block_size`: heatmap block 크기, 기본값 `32`
 - `cfa_green_mode`: `AUTO`, `GXXG`, 또는 `XGGX`
 
-응답에는 전체 추정 hue, 자동 CFA green mode 예측값과 confidence, R/G/B ratio curve, block heatmap 배열이 포함됩니다.
+응답에는 EXIF camera metadata, known Bayer pattern lookup 결과, 자동 CFA green mode 예측값과 confidence, 전체 추정 hue, R/G/B ratio curve, block heatmap 배열이 포함됩니다.
 
 ### `POST /api/generate-sample`
 

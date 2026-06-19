@@ -19,7 +19,23 @@ type CfaMode = "AUTO" | "GXXG" | "XGGX";
 type AnalysisResult = {
   width: number;
   height: number;
-  options: { ds: number; block_size: number; cfa_green_mode: CfaMode; resolved_cfa_green_mode: "GXXG" | "XGGX" };
+  options: {
+    ds: number;
+    block_size: number;
+    cfa_green_mode: CfaMode;
+    resolved_cfa_green_mode: "GXXG" | "XGGX";
+    cfa_resolution_source: "camera_spec" | "image_estimate" | "manual";
+  };
+  camera: {
+    make: string;
+    model: string;
+    software: string;
+    bayer_pattern: string | null;
+    green_mode: "GXXG" | "XGGX" | null;
+    source: string;
+    source_url: string | null;
+    lookup_status: "known" | "unknown";
+  };
   cfa_prediction: {
     mode: "GXXG" | "XGGX";
     confidence: number;
@@ -53,6 +69,13 @@ function reliabilityLabel(reliability?: string) {
   if (reliability === "medium") return "medium";
   if (reliability === "low") return "low";
   return "--";
+}
+
+function cameraLabel(result: AnalysisResult | null) {
+  if (!result) return "--";
+  const make = result.camera.make || "Unknown";
+  const model = result.camera.model || "Unknown";
+  return `${make} ${model}`.trim();
 }
 
 function App() {
@@ -189,6 +212,14 @@ function App() {
               <strong>{result ? result.options.resolved_cfa_green_mode : "--"}</strong>
             </div>
             <div>
+              <span>Bayer pattern</span>
+              <strong>{result ? result.camera.bayer_pattern ?? "unknown" : "--"}</strong>
+            </div>
+            <div>
+              <span>Mode source</span>
+              <strong>{result ? result.options.cfa_resolution_source : "--"}</strong>
+            </div>
+            <div>
               <span>CFA confidence</span>
               <strong>{result ? `${(result.cfa_prediction.confidence * 100).toFixed(1)}%` : "--"}</strong>
             </div>
@@ -203,6 +234,10 @@ function App() {
             <div>
               <span>Image</span>
               <strong>{result ? `${result.width} x ${result.height}` : "--"}</strong>
+            </div>
+            <div>
+              <span>Camera</span>
+              <strong>{cameraLabel(result)}</strong>
             </div>
             <div>
               <span>Sample truth</span>
