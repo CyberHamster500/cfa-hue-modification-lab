@@ -1,100 +1,82 @@
 # CFA Hue Modification Lab
 
-논문 **“Estimation of color modification in digital images by CFA pattern change”**의 핵심 아이디어를 재현한 실험용 프로젝트입니다. 디지털 카메라의 CFA(Color Filter Array) 보간 흔적이 색상 변조 후 RGB 채널 사이에서 이동한다는 관찰을 바탕으로, AIVC(Advanced Intermediate Value Counting) 방식으로 hue modification 정도를 추정합니다.
+논문 **“Estimation of color modification in digital images by CFA pattern change”**의 핵심 아이디어를 재현한 실험용 프로젝트입니다. 이미지의 EXIF 메타데이터에서 카메라 모델을 읽고, 알려진 Bayer CFA 패턴이 있으면 이를 우선 사용하며, 없으면 이미지 기반 AIVC 신호로 `GXXG` / `XGGX` green CFA mode를 추정합니다.
 
-> Choi, C.-H., Lee, H.-Y., & Lee, H.-K. (2013). *Estimation of color modification in digital images by CFA pattern change*. Forensic Science International, 226(1-3), 94-105. DOI: `10.1016/j.forsciint.2012.12.014`
+> Choi, C.-H., Lee, H.-Y., & Lee, H.-K. (2013). *Estimation of color modification in digital images by CFA pattern change*. Forensic Science International, 226(1-3), 94-105. DOI: [`10.1016/j.forsciint.2012.12.014`](https://doi.org/10.1016/j.forsciint.2012.12.014)
 
 ![Python](https://img.shields.io/badge/Python-FastAPI-3776AB)
 ![React](https://img.shields.io/badge/React-Vite-61DAFB)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
-## 요약
+## 개요
 
-색상 변조는 이미지 조작에서 흔하지만, 단순히 RGB 값이 바뀐 결과만 보면 조작 여부와 정도를 판단하기 어렵습니다. 이 논문은 디지털 카메라의 demosaicing 과정이 남기는 CFA 패턴 흔적이 hue 변조 후 RGB 채널 사이에서 이동한다는 점을 이용합니다.
+이 저장소는 논문 전체 실험을 완전히 복제하기보다, GitHub에서 실행해볼 수 있는 **Core + Demo reproduction**을 목표로 합니다.
 
-이 저장소는 그 핵심 아이디어를 재현합니다. 사용자는 이미지를 업로드하고, AIVC ratio curve와 block heatmap을 통해 hue modification 추정 결과를 확인할 수 있습니다.
+- RGB/HSI 기반 hue shift 후보 탐색
+- AIVC(Advanced Intermediate Value Counting) 기반 ratio curve 계산
+- `GXXG` / `XGGX` green CFA mode 처리
+- EXIF `Make` / `Model` 기반 카메라 CFA 패턴 lookup
+- block 단위 hue modification heatmap
+- FastAPI backend, React GUI, Python CLI
+- 합성 샘플 이미지 생성
+- Dresden JPG smoke test 스크립트
 
-## Paper
+원 논문 데이터셋과 PDF는 저장소에 포함하지 않습니다.
 
-- **Title:** Estimation of color modification in digital images by CFA pattern change
-- **Authors:** Chang-Hee Choi, Hae-Yeoun Lee, Heung-Kyu Lee
-- **Venue:** Forensic Science International, 226(1-3), 94-105, 2013
-- **DOI:** [10.1016/j.forsciint.2012.12.014](https://doi.org/10.1016/j.forsciint.2012.12.014)
+## 재현 범위
 
-## Reproduction Status
-
-| Item | Status |
+| 항목 | 상태 |
 | --- | --- |
-| RGB/HSI hue shifting | Implemented |
-| AIVC counting | Implemented |
-| `GXXG` / `XGGX` green CFA mode handling | Implemented |
-| Auto CFA green mode estimation with confidence | Implemented |
-| Ratio curve visualization | Implemented |
-| Block-level heatmap | Implemented |
-| Synthetic demo sample | Implemented |
-| Dresden JPG smoke test | Implemented |
-| Full RAW/dcraw reproduction pipeline | Planned |
-| JPEG quality sweep matching paper figures | Planned |
+| RGB/HSI hue shift | 구현 |
+| AIVC counting | 구현 |
+| `GXXG` / `XGGX` CFA mode | 구현 |
+| EXIF camera metadata 읽기 | 구현 |
+| 알려진 카메라 CFA spec lookup | 구현 |
+| Auto CFA mode fallback | 구현 |
+| Ratio curve visualization | 구현 |
+| Block heatmap | 구현 |
+| 한국어/영어 GUI 토글 | 구현 |
+| 단일 이미지 CLI 분석 | 구현 |
+| Dresden JPG smoke test | 구현 |
+| RAW + dcraw 기반 전체 실험 | 향후 작업 |
+| JPEG quality sweep 논문 figure 재현 | 향후 작업 |
 
-## 무엇을 재현했나
+## 알고리즘 요약
 
-- RGB 이미지에서 hue 후보를 `Ds` 간격으로 순회합니다.
-- 각 후보 이미지의 R/G/B 채널에 대해 cross-neighbor AIVC counting을 수행합니다.
-- 2x2 CFA 위치별 count ratio인 `Rr`, `Gr`, `Br` curve를 계산합니다.
-- `AUTO` 모드에서는 AIVC count parity로 `GXXG`/`XGGX` green CFA mode를 추정하고 confidence를 반환합니다.
-- EXIF `Make`/`Model`을 읽어 알려진 카메라의 Bayer CFA pattern을 우선 표시합니다.
-- `GXXG` 패턴은 `Gr` 최대 위치, `XGGX` 패턴은 `Gr` 최소 위치를 기준으로 hue shift를 추정합니다.
-- 이미지를 block 단위로 나누어 변조 위치를 heatmap으로 시각화합니다.
-
-이 저장소는 논문 전체 실험을 완전 복제하기보다, 논문의 핵심 추정 로직과 데모 가능한 분석 흐름을 재현하는 것을 목표로 합니다.
-
-## Method Overview
-
-1. 입력 이미지를 RGB로 정규화합니다.
-2. EXIF `Make`/`Model`을 읽고 known camera CFA table에서 Bayer pattern을 찾습니다.
-3. 스펙을 찾으면 full Bayer pattern을 green CFA mode로 변환하고, 없으면 image-based Auto CFA estimate를 사용합니다.
-4. hue 후보를 `0..359` 범위에서 `Ds` 간격으로 이동합니다.
-5. 각 hue 후보 이미지의 R/G/B 채널에서 AIVC count를 계산합니다.
-6. 2x2 CFA parity별 count ratio를 이용해 `Rr`, `Gr`, `Br` curve를 만듭니다.
-7. green CFA mode가 `GXXG`이면 `Gr` 최대 위치를, `XGGX`이면 `Gr` 최소 위치를 찾습니다.
-8. 찾은 위치 `Hm`으로부터 `He = (360 - Hm) mod 360`을 계산합니다.
-9. block 단위로 같은 과정을 반복해 변조 위치를 heatmap으로 표시합니다.
+1. 입력 이미지를 RGB로 변환합니다.
+2. EXIF `Make` / `Model` / `Software`를 읽습니다.
+3. curated camera CFA table에서 Bayer pattern을 찾습니다.
+4. 알려진 카메라면 Bayer pattern을 green CFA mode로 변환합니다.
+   - `RGGB`, `BGGR` -> `XGGX`
+   - `GBRG`, `GRBG` -> `GXXG`
+5. 알려진 카메라가 아니면 이미지 자체의 AIVC parity 신호로 `GXXG` / `XGGX`를 추정합니다.
+6. hue 후보를 `Ds` 간격으로 순회하며 각 후보 이미지의 AIVC count를 계산합니다.
+7. `Rr`, `Gr`, `Br` ratio curve를 만들고, 논문 기준에 따라 hue modification을 추정합니다.
+8. 같은 절차를 block 단위로 반복해 heatmap을 만듭니다.
 
 ```mermaid
 flowchart LR
   A["Input image"] --> B["Read EXIF Make/Model"]
   B --> C["Camera CFA spec lookup"]
-  C --> D["Resolve GXXG/XGGX mode"]
+  C --> D["Resolve GXXG/XGGX"]
   D --> E["Hue shift candidates"]
-  E --> F["AIVC counting per RGB channel"]
-  F --> G["Rr / Gr / Br ratio curves"]
-  G --> H["Estimate hue modification"]
+  E --> F["AIVC counting"]
+  F --> G["R/G/B ratio curves"]
+  G --> H["Estimated hue shift"]
   G --> I["Block heatmap"]
 ```
 
-## 데모 화면
+카메라 CFA lookup 정책과 현재 등록된 spec은 [docs/CAMERA_CFA_PATTERNS.md](docs/CAMERA_CFA_PATTERNS.md)에 정리되어 있습니다.
+
+## Demo
 
 ![Desktop demo](docs/screenshots/demo-desktop.png)
 
-## 프로젝트 구성
+GUI는 분석 도구가 첫 화면입니다. 이미지 업로드, 합성 샘플 로드, `Ds`, block size, CFA mode 선택, 한/영 토글, 카메라/CFA 정보, ratio curve, block heatmap을 제공합니다.
 
-```text
-backend/
-  app/main.py                 FastAPI 엔드포인트
-  app/core/hue.py             HSI hue shift, AIVC, CFA mode 예측, curve/heatmap 분석
-  scripts/run_dresden_smoke.py Dresden JPG 스모크 테스트
-  tests/                      알고리즘 및 API 테스트
-frontend/
-  src/main.tsx                React 분석 도구 화면
-  src/styles.css              연구 도구형 UI 스타일
-docs/screenshots/             데모 화면 캡처
-```
+## 설치
 
-카메라별 CFA pattern lookup 정책과 현재 curated table은 [docs/CAMERA_CFA_PATTERNS.md](docs/CAMERA_CFA_PATTERNS.md)에 정리되어 있습니다.
-
-## 실행 방법
-
-### 1. 백엔드 설치 및 실행
+### Backend
 
 ```powershell
 cd backend
@@ -104,9 +86,7 @@ pip install -r requirements.txt
 python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-### 2. 프론트엔드 설치 및 실행
-
-새 터미널에서:
+### Frontend
 
 ```powershell
 cd frontend
@@ -114,7 +94,7 @@ npm install
 npm run dev
 ```
 
-pnpm을 선호한다면:
+또는 pnpm을 사용합니다.
 
 ```powershell
 cd frontend
@@ -122,34 +102,43 @@ pnpm install
 pnpm run dev
 ```
 
-브라우저에서 `http://127.0.0.1:5173`을 열면 됩니다.
+브라우저에서 `http://127.0.0.1:5173`을 엽니다.
 
-### 3. 테스트
+## CLI 사용법
 
-```powershell
-cd backend
-pytest
-```
-
-프론트엔드 production build:
+단일 이미지 분석:
 
 ```powershell
-cd frontend
-npm run build
+$env:PYTHONPATH="$PWD\backend"
+python backend\scripts\analyze_image_cli.py path\to\image.jpg
 ```
 
-## Dresden 데이터셋 스모크 테스트
+전체 JSON 출력:
 
-Dresden Image Database처럼 카메라별 폴더 아래 JPG 파일이 들어 있는 구조를 빠르게 확인할 수 있습니다. 원본 이미지를 직접 변조된 이미지로 해석하지 않고, 코드 안에서 known hue shift를 적용한 복사본을 만든 뒤 추정값 변화량을 비교합니다.
+```powershell
+$env:PYTHONPATH="$PWD\backend"
+python backend\scripts\analyze_image_cli.py path\to\image.jpg --ds 5 --block-size 64 --json
+```
+
+주요 옵션:
+
+- `--ds`: hue search step. 기본값 `10`
+- `--block-size`: heatmap block size. 기본값 `128`
+- `--max-side`: 분석 전 resize longest side. 기본값 `768`
+- `--mode`: `AUTO`, `GXXG`, `XGGX`. 기본값 `AUTO`
+
+CLI 출력에는 EXIF 카메라명, CFA lookup 상태, Bayer pattern, resolved green mode, 추정 hue shift가 포함됩니다.
+
+## Dresden Smoke Test
+
+Dresden Image Database처럼 카메라별 폴더에 JPG가 들어 있는 구조를 빠르게 점검할 수 있습니다. 원본 이미지는 forged image가 아니므로, 스크립트가 내부적으로 known hue shift를 적용한 복사본을 만들고 추정 오차를 확인합니다.
 
 ```powershell
 $env:PYTHONPATH="$PWD\backend"
 python backend\scripts\run_dresden_smoke.py <DATASET_ROOT> --per-camera 1 --max-side 384 --ds 30 --known-shift 120
 ```
 
-예: `<DATASET_ROOT>`에는 `Z:\Dresden_Exp`처럼 Dresden JPG 폴더가 들어 있는 경로를 넣습니다.
-
-최근 스모크 테스트에서는 카메라별 1장씩 13장을 골라 `+120 deg` hue shift를 적용했고, `Ds=30` 기준 모든 샘플이 한 step 이내 오차로 들어왔습니다. 이 수치는 빠른 sanity check이며, 논문 전체 실험 결과를 대체하지 않습니다.
+출력 JSON에는 카메라 EXIF, Bayer pattern, green mode source, image estimate confidence, known shift 대비 오차가 포함됩니다.
 
 ## API
 
@@ -164,31 +153,50 @@ python backend\scripts\run_dresden_smoke.py <DATASET_ROOT> --per-camera 1 --max-
 Form fields:
 
 - `file`: PNG 또는 JPEG 이미지
-- `ds`: hue 탐색 간격, 기본값 `5`
-- `block_size`: heatmap block 크기, 기본값 `32`
-- `cfa_green_mode`: `AUTO`, `GXXG`, 또는 `XGGX`
+- `ds`: hue search step. 기본값 `5`
+- `block_size`: heatmap block size. 기본값 `32`
+- `cfa_green_mode`: `AUTO`, `GXXG`, `XGGX`
 
-응답에는 EXIF camera metadata, known Bayer pattern lookup 결과, 자동 CFA green mode 예측값과 confidence, 전체 추정 hue, R/G/B ratio curve, block heatmap 배열이 포함됩니다.
+응답에는 다음 데이터가 포함됩니다.
+
+- `camera`: EXIF camera metadata, Bayer CFA lookup 결과
+- `options`: 요청 옵션과 실제 resolved CFA mode
+- `cfa_prediction`: 이미지 기반 CFA mode estimate와 confidence
+- `estimate`: 전체 이미지 hue modification estimate
+- `curves`: R/G/B AIVC ratio curves
+- `heatmap`: block-level hue estimate 배열
 
 ### `POST /api/generate-sample`
 
-저작권 부담 없는 합성 샘플을 생성합니다. 중앙 영역에 알려진 hue shift를 적용해 데모와 테스트에 사용합니다.
+저작권 부담 없는 합성 샘플 이미지를 생성합니다. 중앙 영역에 알려진 hue shift를 적용해 GUI와 integration test에 사용합니다.
 
-## 해석할 때 주의할 점
+## 한계
 
-- 원본 Dresden JPG는 hue 변조된 forged 이미지가 아닙니다.
-- 원본의 절대 estimated hue 값은 “변조량”으로 직접 해석하면 안 됩니다.
-- 더 안정적인 검증은 원본에 known hue shift를 적용한 복사본을 만들고, 원본 추정값 대비 이동량을 확인하는 방식입니다.
-- JPEG 품질이 낮거나, resizing/rotation이 강하게 적용된 이미지는 CFA trace가 손상되어 추정 성능이 떨어질 수 있습니다.
-- `AUTO` CFA mode 예측은 JPEG 압축이 강한 이미지에서 confidence가 낮게 나올 수 있으므로 `GXXG`/`XGGX` 수동 선택과 함께 해석해야 합니다.
-- 이 구현은 연구 재현과 교육용 데모입니다. 법적 감정이나 증거 판단에 바로 사용할 수 없습니다.
+- 원본 Dresden JPG는 hue 변조된 forged image가 아닙니다. 원본에서 나온 estimated hue 값은 조작량으로 해석하면 안 됩니다.
+- 신뢰할 수 있는 검증은 원본에 known hue shift를 적용한 후, 원본 estimate 대비 이동량을 비교하는 방식입니다.
+- JPEG 고압축, resizing, rotation, crop은 CFA trace를 크게 약화시킬 수 있습니다.
+- EXIF lookup table은 curated subset입니다. unknown camera는 이미지 기반 fallback을 사용합니다.
+- 이 구현은 연구/교육용 재현입니다. 법적 감정이나 증거 판단에 그대로 사용할 수 없습니다.
 
-## 향후 작업
+## 테스트
 
-- Dresden dataset 준비 스크립트와 dcraw 기반 full reproduction pipeline 추가
-- JPEG quality sweep 실험 및 논문 Fig. 16/17 유사 그래프 재현
-- CFA green mode 자동 추정 정확도 개선
-- 회전, resize, crop이 섞인 변조에 대한 견고성 개선
+```powershell
+cd backend
+pytest
+```
+
+Frontend build:
+
+```powershell
+cd frontend
+npm run build
+```
+
+## Repository Notes
+
+- 논문 PDF와 외부 데이터셋은 저장소에 포함하지 않습니다.
+- `frontend/dist/`, `node_modules/`, Python cache는 commit 대상이 아닙니다.
+- GitHub 공개 저장소명 예시는 `cfa-hue-modification-lab`입니다.
 
 ## Citation
 

@@ -84,6 +84,27 @@ h2 {
   margin-top: 4px;
 }
 
+.language-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 16px;
+  padding: 4px;
+  border-radius: 8px;
+  background: #e8edf3;
+}
+
+.language-toggle button {
+  min-height: 34px;
+  color: #526172;
+  background: transparent;
+}
+
+.language-toggle button.active {
+  color: #ffffff;
+  background: #24364b;
+}
+
 .file-drop {
   display: grid;
   min-height: 132px;
@@ -100,6 +121,11 @@ h2 {
 
 .file-drop input {
   display: none;
+}
+
+.file-drop span {
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .control-grid {
@@ -191,7 +217,7 @@ button:disabled {
 
 .result-strip {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -212,7 +238,7 @@ button:disabled {
 .result-strip strong {
   display: block;
   margin-top: 8px;
-  font-size: 22px;
+  font-size: clamp(16px, 1.6vw, 22px);
   overflow-wrap: anywhere;
 }
 
@@ -289,4 +315,3 @@ button:disabled {
     padding: 14px;
   }
 }
-

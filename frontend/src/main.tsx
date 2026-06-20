@@ -16,6 +16,8 @@ import "./styles.css";
 type CurvePoint = { shift: number; R: number; G: number; B: number };
 type HeatCell = { x: number; y: number; hue: number; confidence: number };
 type CfaMode = "AUTO" | "GXXG" | "XGGX";
+type Language = "ko" | "en";
+
 type AnalysisResult = {
   width: number;
   height: number;
@@ -46,9 +48,83 @@ type AnalysisResult = {
   curves: CurvePoint[];
   heatmap: HeatCell[][];
 };
+
 type SampleResult = { hue_shift: number; image: string; annotated: string };
 
 const API_BASE = `http://${window.location.hostname}:8000`;
+
+const TEXT = {
+  ko: {
+    subtitle: "색상 변조 추정 재현 도구",
+    filePick: "PNG 또는 JPEG 이미지 선택",
+    hueStep: "Hue step Ds",
+    blockSize: "Block size",
+    cfaMode: "CFA green mode",
+    analyze: "분석",
+    sample: "샘플 로드",
+    analyzeError: "분석 중 오류가 발생했습니다.",
+    sampleError: "샘플 생성 중 오류가 발생했습니다.",
+    estimatedHue: "추정 hue shift",
+    resolvedMode: "CFA mode",
+    bayerPattern: "Bayer pattern",
+    modeSource: "Mode source",
+    confidence: "CFA confidence",
+    reliability: "Reliability",
+    criterion: "Criterion",
+    imageSize: "Image",
+    camera: "Camera",
+    sampleTruth: "Sample truth",
+    inputImage: "입력 이미지",
+    heatmap: "Block heatmap",
+    curve: "AIVC ratio curves",
+    emptyImage: "이미지를 선택하거나 샘플을 로드하세요.",
+    emptyHeatmap: "분석 후 block별 hue 추정값이 색으로 표시됩니다.",
+    emptyCurve: "AIVC counting ratio 그래프가 여기에 표시됩니다.",
+    unknown: "unknown",
+    auto: "Auto",
+    source_camera_spec: "camera spec",
+    source_image_estimate: "image estimate",
+    source_manual: "manual",
+    rel_high: "high",
+    rel_medium: "medium",
+    rel_low: "low",
+  },
+  en: {
+    subtitle: "Color modification estimation lab",
+    filePick: "Choose a PNG or JPEG image",
+    hueStep: "Hue step Ds",
+    blockSize: "Block size",
+    cfaMode: "CFA green mode",
+    analyze: "Analyze",
+    sample: "Load sample",
+    analyzeError: "Analysis failed.",
+    sampleError: "Sample generation failed.",
+    estimatedHue: "Estimated hue shift",
+    resolvedMode: "CFA mode",
+    bayerPattern: "Bayer pattern",
+    modeSource: "Mode source",
+    confidence: "CFA confidence",
+    reliability: "Reliability",
+    criterion: "Criterion",
+    imageSize: "Image",
+    camera: "Camera",
+    sampleTruth: "Sample truth",
+    inputImage: "Input image",
+    heatmap: "Block heatmap",
+    curve: "AIVC ratio curves",
+    emptyImage: "Choose an image or load the synthetic sample.",
+    emptyHeatmap: "After analysis, block-level hue estimates are shown as color.",
+    emptyCurve: "AIVC counting ratio curves will appear here.",
+    unknown: "unknown",
+    auto: "Auto",
+    source_camera_spec: "camera spec",
+    source_image_estimate: "image estimate",
+    source_manual: "manual",
+    rel_high: "high",
+    rel_medium: "medium",
+    rel_low: "low",
+  },
+} satisfies Record<Language, Record<string, string>>;
 
 function dataUrlToFile(dataUrl: string, filename: string): File {
   const [meta, payload] = dataUrl.split(",");
@@ -64,21 +140,23 @@ function hueToColor(hue: number, confidence: number) {
   return `hsla(${hue}, 82%, 50%, ${alpha})`;
 }
 
-function reliabilityLabel(reliability?: string) {
-  if (reliability === "high") return "high";
-  if (reliability === "medium") return "medium";
-  if (reliability === "low") return "low";
-  return "--";
+function cameraLabel(result: AnalysisResult | null, unknown: string) {
+  if (!result) return "--";
+  const make = result.camera.make || "";
+  const model = result.camera.model || "";
+  return `${make} ${model}`.trim() || unknown;
 }
 
-function cameraLabel(result: AnalysisResult | null) {
-  if (!result) return "--";
-  const make = result.camera.make || "Unknown";
-  const model = result.camera.model || "Unknown";
-  return `${make} ${model}`.trim();
+function sourceLabel(result: AnalysisResult, labels: Record<string, string>) {
+  return labels[`source_${result.options.cfa_resolution_source}`] ?? result.options.cfa_resolution_source;
+}
+
+function reliabilityLabel(result: AnalysisResult, labels: Record<string, string>) {
+  return labels[`rel_${result.cfa_prediction.reliability}`] ?? result.cfa_prediction.reliability;
 }
 
 function App() {
+  const [language, setLanguage] = useState<Language>("ko");
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string>("");
   const [sample, setSample] = useState<SampleResult | null>(null);
@@ -88,6 +166,7 @@ function App() {
   const [mode, setMode] = useState<CfaMode>("AUTO");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const text = TEXT[language];
 
   const heatmapCells = useMemo(() => result?.heatmap.flat() ?? [], [result]);
   const maxConfidence = useMemo(
@@ -109,7 +188,7 @@ function App() {
       if (!response.ok) throw new Error(await response.text());
       setResult((await response.json()) as AnalysisResult);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "분석 중 오류가 발생했습니다.");
+      setError(err instanceof Error ? err.message : text.analyzeError);
     } finally {
       setBusy(false);
     }
@@ -130,7 +209,7 @@ function App() {
       setPreview(nextSample.image);
       await analyze(nextFile);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "샘플 생성 중 오류가 발생했습니다.");
+      setError(err instanceof Error ? err.message : text.sampleError);
     } finally {
       setBusy(false);
     }
@@ -150,27 +229,38 @@ function App() {
       <section className="workspace">
         <aside className="panel controls">
           <div className="brand">
-            <div className="brand-mark"><FlaskConical size={22} /></div>
+            <div className="brand-mark">
+              <FlaskConical size={22} />
+            </div>
             <div>
               <h1>CFA Hue Lab</h1>
-              <p>색상 변조 추정 재현 도구</p>
+              <p>{text.subtitle}</p>
             </div>
+          </div>
+
+          <div className="language-toggle" role="group" aria-label="Language">
+            <button type="button" className={language === "ko" ? "active" : ""} onClick={() => setLanguage("ko")}>
+              한국어
+            </button>
+            <button type="button" className={language === "en" ? "active" : ""} onClick={() => setLanguage("en")}>
+              English
+            </button>
           </div>
 
           <label className="file-drop">
             <ImagePlus size={26} />
-            <span>{file ? file.name : "PNG 또는 JPEG 이미지 선택"}</span>
+            <span>{file ? file.name : text.filePick}</span>
             <input type="file" accept="image/png,image/jpeg" onChange={onFileChange} />
           </label>
 
           <div className="control-grid">
             <label>
-              <span>Hue step Ds</span>
+              <span>{text.hueStep}</span>
               <input type="range" min="1" max="20" value={ds} onChange={(event) => setDs(Number(event.target.value))} />
               <strong>{ds} deg</strong>
             </label>
             <label>
-              <span>Block size</span>
+              <span>{text.blockSize}</span>
               <select value={blockSize} onChange={(event) => setBlockSize(Number(event.target.value))}>
                 <option value={32}>32 x 32</option>
                 <option value={64}>64 x 64</option>
@@ -178,9 +268,9 @@ function App() {
               </select>
             </label>
             <label>
-              <span>CFA green mode</span>
+              <span>{text.cfaMode}</span>
               <select value={mode} onChange={(event) => setMode(event.target.value as CfaMode)}>
-                <option value="AUTO">Auto</option>
+                <option value="AUTO">{text.auto}</option>
                 <option value="GXXG">GXXG</option>
                 <option value="XGGX">XGGX</option>
               </select>
@@ -190,11 +280,11 @@ function App() {
           <div className="actions">
             <button onClick={() => analyze()} disabled={!file || busy}>
               {busy ? <Loader2 className="spin" size={18} /> : <Activity size={18} />}
-              분석
+              {text.analyze}
             </button>
             <button className="secondary" onClick={loadSample} disabled={busy}>
               <Upload size={18} />
-              샘플 로드
+              {text.sample}
             </button>
           </div>
 
@@ -204,43 +294,43 @@ function App() {
         <section className="main-area">
           <div className="result-strip">
             <div>
-              <span>Estimated hue shift</span>
+              <span>{text.estimatedHue}</span>
               <strong>{result ? `${result.estimate.estimated_hue.toFixed(1)} deg` : "--"}</strong>
             </div>
             <div>
-              <span>CFA mode</span>
+              <span>{text.resolvedMode}</span>
               <strong>{result ? result.options.resolved_cfa_green_mode : "--"}</strong>
             </div>
             <div>
-              <span>Bayer pattern</span>
-              <strong>{result ? result.camera.bayer_pattern ?? "unknown" : "--"}</strong>
+              <span>{text.bayerPattern}</span>
+              <strong>{result ? result.camera.bayer_pattern ?? text.unknown : "--"}</strong>
             </div>
             <div>
-              <span>Mode source</span>
-              <strong>{result ? result.options.cfa_resolution_source : "--"}</strong>
+              <span>{text.modeSource}</span>
+              <strong>{result ? sourceLabel(result, text) : "--"}</strong>
             </div>
             <div>
-              <span>CFA confidence</span>
+              <span>{text.confidence}</span>
               <strong>{result ? `${(result.cfa_prediction.confidence * 100).toFixed(1)}%` : "--"}</strong>
             </div>
             <div>
-              <span>Reliability</span>
-              <strong>{result ? reliabilityLabel(result.cfa_prediction.reliability) : "--"}</strong>
+              <span>{text.reliability}</span>
+              <strong>{result ? reliabilityLabel(result, text) : "--"}</strong>
             </div>
             <div>
-              <span>Criterion</span>
+              <span>{text.criterion}</span>
               <strong>{result ? result.estimate.criterion : "--"}</strong>
             </div>
             <div>
-              <span>Image</span>
+              <span>{text.imageSize}</span>
               <strong>{result ? `${result.width} x ${result.height}` : "--"}</strong>
             </div>
             <div>
-              <span>Camera</span>
-              <strong>{cameraLabel(result)}</strong>
+              <span>{text.camera}</span>
+              <strong>{cameraLabel(result, text.unknown)}</strong>
             </div>
             <div>
-              <span>Sample truth</span>
+              <span>{text.sampleTruth}</span>
               <strong>{sample ? `${sample.hue_shift} deg` : "--"}</strong>
             </div>
           </div>
@@ -248,14 +338,18 @@ function App() {
           <div className="visual-grid">
             <section className="panel image-stage">
               <header>
-                <h2>입력 이미지</h2>
+                <h2>{text.inputImage}</h2>
               </header>
-              {preview ? <img src={preview} alt="Uploaded CFA analysis target" /> : <div className="empty">이미지를 선택하거나 샘플을 로드하세요.</div>}
+              {preview ? (
+                <img src={preview} alt="Uploaded CFA analysis target" />
+              ) : (
+                <div className="empty">{text.emptyImage}</div>
+              )}
             </section>
 
             <section className="panel image-stage">
               <header>
-                <h2>Block heatmap</h2>
+                <h2>{text.heatmap}</h2>
               </header>
               <div className="heatmap-wrap">
                 {preview && <img src={preview} alt="Heatmap base" />}
@@ -277,14 +371,14 @@ function App() {
                     ))}
                   </div>
                 )}
-                {!preview && <div className="empty">분석 후 block별 hue 추정값이 색으로 표시됩니다.</div>}
+                {!preview && <div className="empty">{text.emptyHeatmap}</div>}
               </div>
             </section>
           </div>
 
           <section className="panel chart-panel">
             <header>
-              <h2>AIVC ratio curves</h2>
+              <h2>{text.curve}</h2>
             </header>
             <div className="chart-box">
               {result ? (
@@ -301,7 +395,7 @@ function App() {
                   </LineChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="empty">AIVC counting ratio 그래프가 여기에 표시됩니다.</div>
+                <div className="empty">{text.emptyCurve}</div>
               )}
             </div>
           </section>

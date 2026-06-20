@@ -11,7 +11,7 @@ from app.core.hue import angular_error, estimate_cfa_green_mode, estimate_from_c
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run a quick CFA hue-shift smoke test on Dresden-style JPG folders.")
-    parser.add_argument("dataset", type=Path, help="Dataset root, for example Z:\\Dresden_Exp")
+    parser.add_argument("dataset", type=Path, help="Dataset root containing Dresden-style camera folders.")
     parser.add_argument("--per-camera", type=int, default=1, help="Number of JPG files to sample per camera folder.")
     parser.add_argument("--max-side", type=int, default=384, help="Resize longest side before analysis.")
     parser.add_argument("--ds", type=int, default=30, help="Hue search step in degrees.")
