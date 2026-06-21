@@ -1,6 +1,6 @@
 # CFA Hue Modification Lab
 
-논문 **“Estimation of color modification in digital images by CFA pattern change”**의 핵심 아이디어를 재현한 실험용 프로젝트입니다. 이미지의 EXIF 메타데이터에서 카메라 모델을 읽고, 알려진 Bayer CFA 패턴이 있으면 이를 우선 사용하며, 없으면 이미지 기반 AIVC 신호로 `GXXG` / `XGGX` green CFA mode를 추정합니다.
+논문 **“Estimation of color modification in digital images by CFA pattern change”**의 핵심 알고리즘을 재현한 실험용 프로젝트입니다. 이미지의 CFA(Color Filter Array) 보간 흔적이 hue modification 이후 RGB 채널 사이에서 달라지는 현상을 AIVC(Advanced Intermediate Value Counting)로 추정합니다.
 
 > Choi, C.-H., Lee, H.-Y., & Lee, H.-K. (2013). *Estimation of color modification in digital images by CFA pattern change*. Forensic Science International, 226(1-3), 94-105. DOI: [`10.1016/j.forsciint.2012.12.014`](https://doi.org/10.1016/j.forsciint.2012.12.014)
 
@@ -10,18 +10,18 @@
 
 ## 개요
 
-이 저장소는 논문 전체 실험을 완전히 복제하기보다, GitHub에서 실행해볼 수 있는 **Core + Demo reproduction**을 목표로 합니다.
+이 저장소는 논문의 핵심 추정 절차를 실행 가능한 형태로 재현합니다.
 
 - RGB/HSI 기반 hue shift 후보 탐색
-- AIVC(Advanced Intermediate Value Counting) 기반 ratio curve 계산
+- AIVC 기반 `Rr`, `Gr`, `Br` ratio curve 계산
 - `GXXG` / `XGGX` green CFA mode 처리
-- EXIF `Make` / `Model` 기반 카메라 CFA 패턴 lookup
+- EXIF `Make` / `Model` 기반 카메라 CFA pattern lookup
 - block 단위 hue modification heatmap
 - FastAPI backend, React GUI, Python CLI
-- 합성 샘플 이미지 생성
-- Dresden JPG smoke test 스크립트
+- Dresden JPG smoke test
+- RAW 개발(development) ablation: `rawpy`/LibRaw 기반
 
-원 논문 데이터셋과 PDF는 저장소에 포함하지 않습니다.
+논문 PDF와 외부 데이터셋은 저장소에 포함하지 않습니다.
 
 ## 재현 범위
 
@@ -38,8 +38,16 @@
 | 한국어/영어 GUI 토글 | 구현 |
 | 단일 이미지 CLI 분석 | 구현 |
 | Dresden JPG smoke test | 구현 |
-| RAW + dcraw 기반 전체 실험 | 향후 작업 |
+| RAW 개발 ablation (`rawpy`) | 구현 |
+| Dresden JPG 전체 batch benchmark | 향후 작업 |
 | JPEG quality sweep 논문 figure 재현 | 향후 작업 |
+| `dcraw` executable backend | 선택 사항 |
+
+## RAW와 dcraw에 대한 입장
+
+Dresden 원 배포에는 문헌상 RAW, Lightroom processed RAW, DCRaw processed RAW subset이 언급됩니다. 하지만 현재 접근 가능한 Kaggle Dresden 배포본과 이 프로젝트에서 사용한 로컬 Dresden set은 JPG-only입니다.
+
+따라서 기본 재현은 JPG 입력 기준으로 동작합니다. RAW가 확보된 경우에는 `dcraw` 대신 `rawpy`/LibRaw로 RAW를 RGB로 develop해서 ablation 실험을 수행합니다. `dcraw`는 과거 연구와의 비교를 위한 historical reference로 남기고, 호환성과 설치 편의성 때문에 현재 구현의 기본 backend로는 사용하지 않습니다.
 
 ## 알고리즘 요약
 
@@ -56,8 +64,8 @@
 
 ```mermaid
 flowchart LR
-  A["Input image"] --> B["Read EXIF Make/Model"]
-  B --> C["Camera CFA spec lookup"]
+  A["Input image or RAW"] --> B["RGB image"]
+  B --> C["Read EXIF / camera metadata"]
   C --> D["Resolve GXXG/XGGX"]
   D --> E["Hue shift candidates"]
   E --> F["AIVC counting"]
@@ -94,19 +102,11 @@ npm install
 npm run dev
 ```
 
-또는 pnpm을 사용합니다.
-
-```powershell
-cd frontend
-pnpm install
-pnpm run dev
-```
-
 브라우저에서 `http://127.0.0.1:5173`을 엽니다.
 
 ## CLI 사용법
 
-단일 이미지 분석:
+단일 JPEG/PNG 이미지 분석:
 
 ```powershell
 $env:PYTHONPATH="$PWD\backend"
@@ -127,7 +127,34 @@ python backend\scripts\analyze_image_cli.py path\to\image.jpg --ds 5 --block-siz
 - `--max-side`: 분석 전 resize longest side. 기본값 `768`
 - `--mode`: `AUTO`, `GXXG`, `XGGX`. 기본값 `AUTO`
 
-CLI 출력에는 EXIF 카메라명, CFA lookup 상태, Bayer pattern, resolved green mode, 추정 hue shift가 포함됩니다.
+## RAW Ablation
+
+RAW 이미지가 있을 때는 `rawpy` backend로 develop한 RGB에 대해 같은 AIVC 분석을 실행할 수 있습니다.
+
+```powershell
+$env:PYTHONPATH="$PWD\backend"
+python backend\scripts\raw_ablation_cli.py path\to\image.NEF --known-shift 120 --ds 10
+```
+
+JPEG 압축 품질별 degradation도 함께 볼 수 있습니다.
+
+```powershell
+$env:PYTHONPATH="$PWD\backend"
+python backend\scripts\raw_ablation_cli.py path\to\image.NEF --known-shift 120 --jpeg-quality 95 85 70 50
+```
+
+이 스크립트는 다음을 출력합니다.
+
+- RAW backend
+- rawpy가 읽은 raw Bayer pattern과 green CFA mode
+- baseline estimated hue
+- known hue shift 적용 후 estimated hue
+- baseline 대비 delta와 known shift 대비 error
+- JPEG quality별 error
+
+RAW ablation에서는 EXIF camera lookup보다 RAW 컨테이너에서 직접 읽은 `raw_pattern`을 우선합니다. 카메라 spec table과 RAW 파일 내부 pattern이 다르면 JSON 결과의 `raw_camera_cfa_conflict`로 표시합니다.
+
+공개 테스트용 RAW 샘플은 raw.pixls.us에서 받을 수 있습니다. raw.pixls.us는 업로드자가 public domain/CC0로 공개한 RAW 샘플을 모아 LibRaw, darktable, RawTherapee regression testing 등에 사용하는 archive입니다.
 
 ## Dresden Smoke Test
 
@@ -176,6 +203,7 @@ Form fields:
 - 신뢰할 수 있는 검증은 원본에 known hue shift를 적용한 후, 원본 estimate 대비 이동량을 비교하는 방식입니다.
 - JPEG 고압축, resizing, rotation, crop은 CFA trace를 크게 약화시킬 수 있습니다.
 - EXIF lookup table은 curated subset입니다. unknown camera는 이미지 기반 fallback을 사용합니다.
+- RAW ablation은 RAW 파일이 확보된 경우에만 가능합니다. RAW 파일 자체는 저장소에 포함하지 않습니다.
 - 이 구현은 연구/교육용 재현입니다. 법적 감정이나 증거 판단에 그대로 사용할 수 없습니다.
 
 ## 테스트
@@ -195,8 +223,8 @@ npm run build
 ## Repository Notes
 
 - 논문 PDF와 외부 데이터셋은 저장소에 포함하지 않습니다.
-- `frontend/dist/`, `node_modules/`, Python cache는 commit 대상이 아닙니다.
-- GitHub 공개 저장소명 예시는 `cfa-hue-modification-lab`입니다.
+- `local_raw_samples/`, `frontend/dist/`, `node_modules/`, Python cache는 commit 대상이 아닙니다.
+- GitHub 공개 저장소명은 `cfa-hue-modification-lab`입니다.
 
 ## Citation
 

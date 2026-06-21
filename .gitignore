@@ -8,3 +8,5 @@ build/
 *.pyc
 *.log
 *.tsbuildinfo
+.codex-remote-attachments/
+local_raw_samples/
