@@ -1,5 +1,7 @@
 # CFA Hue Modification Estimation
 
+[Korean README](README-ko.md)
+
 Reference implementation for:
 
 > Chang-Hee Choi, Hae-Yeoun Lee, and Heung-Kyu Lee. "Estimation of color modification in digital images by CFA pattern change." Forensic Science International, 226(1-3), 94-105, 2013. DOI: 10.1016/j.forsciint.2012.12.014.

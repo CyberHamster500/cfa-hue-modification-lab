@@ -203,7 +203,7 @@ function reliabilityLabel(result: AnalysisResult, labels: Record<string, string>
 }
 
 function App() {
-  const [language, setLanguage] = useState<Language>("ko");
+  const [language, setLanguage] = useState<Language>("en");
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string>("");
   const [sample, setSample] = useState<SampleResult | null>(null);
