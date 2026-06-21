@@ -5,7 +5,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.core.camera_metadata import extract_exif_camera, lookup_camera_cfa
-from app.core.cfa_ivc import identify_cfa_pattern_payload
 from app.core.hue import AnalysisOptions, analyze_image, generate_synthetic_sample, image_to_data_url, load_rgb_image
 from app.core.raw_develop import develop_raw_bytes_with_rawpy, is_supported_raw_filename
 from PIL import Image
@@ -85,7 +84,6 @@ async def analyze(
     if input_kind == "raw" and cfa_green_mode == "AUTO" and raw_metadata and raw_metadata.get("green_mode"):
         result["options"]["cfa_resolution_source"] = "raw_pattern"
     result["camera"] = camera
-    result["cfa_pattern_prediction"] = identify_cfa_pattern_payload(rgb)
     result["input_kind"] = input_kind
     result["raw_metadata"] = raw_metadata
     result["raw_camera_cfa_conflict"] = (

@@ -124,7 +124,7 @@ python backend\scripts\analyze_image_cli.py path\to\image.NEF --ds 10
 
 ```powershell
 $env:PYTHONPATH="$PWD\backend"
-python backend\scripts\identify_cfa_cli.py path\to\image.NEF
+python backend\scripts\analyze_image_cli.py path\to\image.NEF
 ```
 
 이 출력은 EXIF/RAW metadata의 CFA 정보와 IVC 기반 Bayer pattern 예측값을 함께 보여줍니다.

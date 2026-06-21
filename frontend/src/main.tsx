@@ -54,11 +54,6 @@ type AnalysisResult = {
     reliability: "low" | "medium" | "high";
     source_channel: "R" | "G" | "B";
   };
-  cfa_pattern_prediction?: {
-    bayer_pattern: string;
-    green_mode: "GXXG" | "XGGX";
-    confidence: number;
-  };
   estimate: { estimated_hue: number; hm: number; criterion: string };
   curves: CurvePoint[];
   heatmap: HeatCell[][];
@@ -102,8 +97,6 @@ const TEXT = {
     bayerPattern: "Bayer pattern",
     rawBayer: "RAW Bayer",
     rawMode: "RAW mode",
-    imageBayer: "Image Bayer",
-    imageBayerConfidence: "Image Bayer conf.",
     modeSource: "Mode source",
     confidence: "CFA confidence",
     reliability: "Reliability",
@@ -147,8 +140,6 @@ const TEXT = {
     bayerPattern: "Bayer pattern",
     rawBayer: "RAW Bayer",
     rawMode: "RAW mode",
-    imageBayer: "Image Bayer",
-    imageBayerConfidence: "Image Bayer conf.",
     modeSource: "Mode source",
     confidence: "CFA confidence",
     reliability: "Reliability",
@@ -380,14 +371,6 @@ function App() {
             <div>
               <span>{text.rawMode}</span>
               <strong>{result ? result.raw_metadata?.green_mode ?? "n/a" : "--"}</strong>
-            </div>
-            <div>
-              <span>{text.imageBayer}</span>
-              <strong>{result ? result.cfa_pattern_prediction?.bayer_pattern ?? "unknown" : "--"}</strong>
-            </div>
-            <div>
-              <span>{text.imageBayerConfidence}</span>
-              <strong>{result ? `${((result.cfa_pattern_prediction?.confidence ?? 0) * 100).toFixed(1)}%` : "--"}</strong>
             </div>
             <div>
               <span>{text.modeSource}</span>

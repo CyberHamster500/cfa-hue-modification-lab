@@ -6,7 +6,6 @@ import sys
 from pathlib import Path
 
 from app.core.camera_metadata import extract_exif_camera, lookup_camera_cfa
-from app.core.cfa_ivc import identify_cfa_pattern_payload
 from app.core.hue import AnalysisOptions, analyze_image, load_rgb_image
 from app.core.raw_develop import develop_raw_with_rawpy, is_supported_raw_filename
 
@@ -26,7 +25,6 @@ def _summary(result: dict, image_path: Path) -> str:
     camera = result["camera"]
     options = result["options"]
     prediction = result["cfa_prediction"]
-    pattern_prediction = result.get("cfa_pattern_prediction") or {}
     estimate = result["estimate"]
     camera_name = " ".join(part for part in [camera.get("make"), camera.get("model")] if part) or "unknown"
     rows = [
@@ -38,8 +36,6 @@ def _summary(result: dict, image_path: Path) -> str:
         ("raw_bayer_pattern", (result.get("raw_metadata") or {}).get("bayer_pattern") or "n/a"),
         ("raw_green_mode", (result.get("raw_metadata") or {}).get("green_mode") or "n/a"),
         ("raw_camera_cfa_conflict", str(result.get("raw_camera_cfa_conflict", False))),
-        ("image_bayer_prediction", pattern_prediction.get("bayer_pattern") or "unknown"),
-        ("image_bayer_confidence", f"{float(pattern_prediction.get('confidence') or 0.0) * 100:.2f}%"),
         ("resolved_green_mode", options["resolved_cfa_green_mode"]),
         ("mode_source", options["cfa_resolution_source"]),
         ("image_estimate_mode", prediction["mode"]),
@@ -95,7 +91,6 @@ def main() -> int:
     if input_kind == "raw" and args.mode == "AUTO" and raw_metadata and raw_metadata.get("green_mode"):
         result["options"]["cfa_resolution_source"] = "raw_pattern"
     result["camera"] = camera
-    result["cfa_pattern_prediction"] = identify_cfa_pattern_payload(rgb)
     result["input_kind"] = input_kind
     result["raw_metadata"] = raw_metadata
     result["raw_camera_cfa_conflict"] = (
