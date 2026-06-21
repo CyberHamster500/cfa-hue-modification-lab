@@ -5,7 +5,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.core.camera_metadata import extract_exif_camera, lookup_camera_cfa
+from app.core.cfa_ivc import identify_cfa_pattern_payload
 from app.core.hue import AnalysisOptions, analyze_image, generate_synthetic_sample, image_to_data_url, load_rgb_image
+from app.core.raw_develop import develop_raw_bytes_with_rawpy, is_supported_raw_filename
+from PIL import Image
 
 app = FastAPI(title="CFA Hue Modification Reproduction", version="0.1.0")
 
@@ -38,9 +41,38 @@ async def analyze(
         return JSONResponse({"detail": "block_size must be between 16 and 256"}, status_code=400)
 
     data = await file.read()
-    camera = lookup_camera_cfa(extract_exif_camera(data))
-    rgb = load_rgb_image(data)
-    preferred_mode = camera["green_mode"] if cfa_green_mode == "AUTO" else None
+    try:
+        camera = lookup_camera_cfa(extract_exif_camera(data))
+    except Exception:
+        camera = {
+            "make": "",
+            "model": "",
+            "software": "",
+            "normalized_key": "",
+            "bayer_pattern": None,
+            "green_mode": None,
+            "source": "EXIF camera metadata could not be read; using image or RAW metadata fallback",
+            "source_url": None,
+            "lookup_status": "unknown",
+        }
+    raw_metadata = None
+    developed_preview = None
+    input_kind = "raw" if is_supported_raw_filename(file.filename or "") else "rgb"
+    if input_kind == "raw":
+        try:
+            rgb, raw_metadata = develop_raw_bytes_with_rawpy(data, suffix=f".{(file.filename or 'raw').split('.')[-1]}")
+        except RuntimeError as exc:
+            return JSONResponse({"detail": str(exc)}, status_code=500)
+        except Exception as exc:
+            return JSONResponse({"detail": f"RAW development failed: {exc}"}, status_code=400)
+        preview_image = Image.fromarray(rgb, "RGB")
+        developed_preview = image_to_data_url(preview_image)
+    else:
+        rgb = load_rgb_image(data)
+
+    preferred_mode = None
+    if cfa_green_mode == "AUTO":
+        preferred_mode = str((raw_metadata or {}).get("green_mode") or camera["green_mode"] or "") or None
     result = analyze_image(
         rgb,
         AnalysisOptions(
@@ -50,7 +82,18 @@ async def analyze(
             preferred_cfa_green_mode=preferred_mode,  # type: ignore[arg-type]
         ),
     )
+    if input_kind == "raw" and cfa_green_mode == "AUTO" and raw_metadata and raw_metadata.get("green_mode"):
+        result["options"]["cfa_resolution_source"] = "raw_pattern"
     result["camera"] = camera
+    result["cfa_pattern_prediction"] = identify_cfa_pattern_payload(rgb)
+    result["input_kind"] = input_kind
+    result["raw_metadata"] = raw_metadata
+    result["raw_camera_cfa_conflict"] = (
+        bool(raw_metadata and raw_metadata.get("green_mode") and camera.get("green_mode"))
+        and raw_metadata.get("green_mode") != camera.get("green_mode")
+    )
+    if developed_preview:
+        result["developed_preview"] = developed_preview
     return JSONResponse(result)
 
 

@@ -21,12 +21,22 @@ type Language = "ko" | "en";
 type AnalysisResult = {
   width: number;
   height: number;
+  input_kind?: "rgb" | "raw";
+  developed_preview?: string;
+  raw_camera_cfa_conflict?: boolean;
+  raw_metadata?: {
+    backend: string;
+    bayer_pattern: string | null;
+    green_mode: "GXXG" | "XGGX" | null;
+    raw_size: [number, number];
+    rgb_size: [number, number];
+  } | null;
   options: {
     ds: number;
     block_size: number;
     cfa_green_mode: CfaMode;
     resolved_cfa_green_mode: "GXXG" | "XGGX";
-    cfa_resolution_source: "camera_spec" | "image_estimate" | "manual";
+    cfa_resolution_source: "camera_spec" | "image_estimate" | "manual" | "raw_pattern";
   };
   camera: {
     make: string;
@@ -44,6 +54,11 @@ type AnalysisResult = {
     reliability: "low" | "medium" | "high";
     source_channel: "R" | "G" | "B";
   };
+  cfa_pattern_prediction?: {
+    bayer_pattern: string;
+    green_mode: "GXXG" | "XGGX";
+    confidence: number;
+  };
   estimate: { estimated_hue: number; hm: number; criterion: string };
   curves: CurvePoint[];
   heatmap: HeatCell[][];
@@ -52,11 +67,28 @@ type AnalysisResult = {
 type SampleResult = { hue_shift: number; image: string; annotated: string };
 
 const API_BASE = `http://${window.location.hostname}:8000`;
+const ACCEPTED_FILES = [
+  "image/png",
+  "image/jpeg",
+  ".nef",
+  ".cr2",
+  ".cr3",
+  ".arw",
+  ".dng",
+  ".orf",
+  ".rw2",
+  ".raf",
+  ".pef",
+  ".sr2",
+].join(",");
+
+const RAW_EXTENSIONS = [".nef", ".cr2", ".cr3", ".arw", ".dng", ".orf", ".rw2", ".raf", ".pef", ".sr2"];
 
 const TEXT = {
   ko: {
     subtitle: "색상 변조 추정 재현 도구",
-    filePick: "PNG 또는 JPEG 이미지 선택",
+    filePick: "PNG, JPEG 또는 RAW 이미지 선택",
+    rawPending: "RAW 파일은 분석 후 rawpy 개발 미리보기가 표시됩니다.",
     hueStep: "Hue step Ds",
     blockSize: "Block size",
     cfaMode: "CFA green mode",
@@ -66,7 +98,12 @@ const TEXT = {
     sampleError: "샘플 생성 중 오류가 발생했습니다.",
     estimatedHue: "추정 hue shift",
     resolvedMode: "CFA mode",
+    inputType: "Input type",
     bayerPattern: "Bayer pattern",
+    rawBayer: "RAW Bayer",
+    rawMode: "RAW mode",
+    imageBayer: "Image Bayer",
+    imageBayerConfidence: "Image Bayer conf.",
     modeSource: "Mode source",
     confidence: "CFA confidence",
     reliability: "Reliability",
@@ -74,6 +111,7 @@ const TEXT = {
     imageSize: "Image",
     camera: "Camera",
     sampleTruth: "Sample truth",
+    conflict: "CFA conflict",
     inputImage: "입력 이미지",
     heatmap: "Block heatmap",
     curve: "AIVC ratio curves",
@@ -85,13 +123,17 @@ const TEXT = {
     source_camera_spec: "camera spec",
     source_image_estimate: "image estimate",
     source_manual: "manual",
+    source_raw_pattern: "raw pattern",
     rel_high: "high",
     rel_medium: "medium",
     rel_low: "low",
+    yes: "yes",
+    no: "no",
   },
   en: {
     subtitle: "Color modification estimation lab",
-    filePick: "Choose a PNG or JPEG image",
+    filePick: "Choose a PNG, JPEG, or RAW image",
+    rawPending: "RAW files show a rawpy-developed preview after analysis.",
     hueStep: "Hue step Ds",
     blockSize: "Block size",
     cfaMode: "CFA green mode",
@@ -101,7 +143,12 @@ const TEXT = {
     sampleError: "Sample generation failed.",
     estimatedHue: "Estimated hue shift",
     resolvedMode: "CFA mode",
+    inputType: "Input type",
     bayerPattern: "Bayer pattern",
+    rawBayer: "RAW Bayer",
+    rawMode: "RAW mode",
+    imageBayer: "Image Bayer",
+    imageBayerConfidence: "Image Bayer conf.",
     modeSource: "Mode source",
     confidence: "CFA confidence",
     reliability: "Reliability",
@@ -109,6 +156,7 @@ const TEXT = {
     imageSize: "Image",
     camera: "Camera",
     sampleTruth: "Sample truth",
+    conflict: "CFA conflict",
     inputImage: "Input image",
     heatmap: "Block heatmap",
     curve: "AIVC ratio curves",
@@ -120,11 +168,19 @@ const TEXT = {
     source_camera_spec: "camera spec",
     source_image_estimate: "image estimate",
     source_manual: "manual",
+    source_raw_pattern: "raw pattern",
     rel_high: "high",
     rel_medium: "medium",
     rel_low: "low",
+    yes: "yes",
+    no: "no",
   },
 } satisfies Record<Language, Record<string, string>>;
+
+function isRawFile(file: File) {
+  const name = file.name.toLowerCase();
+  return RAW_EXTENSIONS.some((ext) => name.endsWith(ext));
+}
 
 function dataUrlToFile(dataUrl: string, filename: string): File {
   const [meta, payload] = dataUrl.split(",");
@@ -168,6 +224,7 @@ function App() {
   const [error, setError] = useState("");
   const text = TEXT[language];
 
+  const displayPreview = result?.developed_preview || preview;
   const heatmapCells = useMemo(() => result?.heatmap.flat() ?? [], [result]);
   const maxConfidence = useMemo(
     () => heatmapCells.reduce((max, cell) => Math.max(max, cell.confidence), 0),
@@ -221,7 +278,13 @@ function App() {
     setResult(null);
     setSample(null);
     setError("");
-    if (nextFile) setPreview(URL.createObjectURL(nextFile));
+    if (!nextFile) {
+      setPreview("");
+    } else if (isRawFile(nextFile)) {
+      setPreview("");
+    } else {
+      setPreview(URL.createObjectURL(nextFile));
+    }
   }
 
   return (
@@ -250,7 +313,8 @@ function App() {
           <label className="file-drop">
             <ImagePlus size={26} />
             <span>{file ? file.name : text.filePick}</span>
-            <input type="file" accept="image/png,image/jpeg" onChange={onFileChange} />
+            {file && isRawFile(file) && !result?.developed_preview && <small>{text.rawPending}</small>}
+            <input type="file" accept={ACCEPTED_FILES} onChange={onFileChange} />
           </label>
 
           <div className="control-grid">
@@ -302,12 +366,36 @@ function App() {
               <strong>{result ? result.options.resolved_cfa_green_mode : "--"}</strong>
             </div>
             <div>
+              <span>{text.inputType}</span>
+              <strong>{result ? result.input_kind ?? "rgb" : "--"}</strong>
+            </div>
+            <div>
               <span>{text.bayerPattern}</span>
               <strong>{result ? result.camera.bayer_pattern ?? text.unknown : "--"}</strong>
             </div>
             <div>
+              <span>{text.rawBayer}</span>
+              <strong>{result ? result.raw_metadata?.bayer_pattern ?? "n/a" : "--"}</strong>
+            </div>
+            <div>
+              <span>{text.rawMode}</span>
+              <strong>{result ? result.raw_metadata?.green_mode ?? "n/a" : "--"}</strong>
+            </div>
+            <div>
+              <span>{text.imageBayer}</span>
+              <strong>{result ? result.cfa_pattern_prediction?.bayer_pattern ?? "unknown" : "--"}</strong>
+            </div>
+            <div>
+              <span>{text.imageBayerConfidence}</span>
+              <strong>{result ? `${((result.cfa_pattern_prediction?.confidence ?? 0) * 100).toFixed(1)}%` : "--"}</strong>
+            </div>
+            <div>
               <span>{text.modeSource}</span>
               <strong>{result ? sourceLabel(result, text) : "--"}</strong>
+            </div>
+            <div>
+              <span>{text.conflict}</span>
+              <strong>{result ? (result.raw_camera_cfa_conflict ? text.yes : text.no) : "--"}</strong>
             </div>
             <div>
               <span>{text.confidence}</span>
@@ -340,8 +428,8 @@ function App() {
               <header>
                 <h2>{text.inputImage}</h2>
               </header>
-              {preview ? (
-                <img src={preview} alt="Uploaded CFA analysis target" />
+              {displayPreview ? (
+                <img src={displayPreview} alt="Uploaded CFA analysis target" />
               ) : (
                 <div className="empty">{text.emptyImage}</div>
               )}
@@ -352,7 +440,7 @@ function App() {
                 <h2>{text.heatmap}</h2>
               </header>
               <div className="heatmap-wrap">
-                {preview && <img src={preview} alt="Heatmap base" />}
+                {displayPreview && <img src={displayPreview} alt="Heatmap base" />}
                 {result && (
                   <div className="heatmap-layer">
                     {heatmapCells.map((cell) => (
@@ -371,7 +459,7 @@ function App() {
                     ))}
                   </div>
                 )}
-                {!preview && <div className="empty">{text.emptyHeatmap}</div>}
+                {!displayPreview && <div className="empty">{text.emptyHeatmap}</div>}
               </div>
             </section>
           </div>

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 from typing import Any
 
 import numpy as np
@@ -59,3 +60,18 @@ def develop_raw_with_rawpy(path: Path, max_side: int = 768) -> tuple[np.ndarray,
         rgb = np.asarray(image, dtype=np.uint8)
     metadata["rgb_size"] = [int(rgb.shape[1]), int(rgb.shape[0])]
     return rgb, metadata
+
+
+def develop_raw_bytes_with_rawpy(data: bytes, suffix: str = ".raw", max_side: int = 768) -> tuple[np.ndarray, dict[str, object]]:
+    with NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+        tmp.write(data)
+        tmp.flush()
+        tmp_path = Path(tmp.name)
+    try:
+        return develop_raw_with_rawpy(tmp_path, max_side=max_side)
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+
+def is_supported_raw_filename(filename: str) -> bool:
+    return Path(filename).suffix.lower() in {".nef", ".cr2", ".cr3", ".arw", ".dng", ".orf", ".rw2", ".raf", ".pef", ".sr2"}

@@ -80,7 +80,7 @@ flowchart LR
 
 ![Desktop demo](docs/screenshots/demo-desktop.png)
 
-GUI는 분석 도구가 첫 화면입니다. 이미지 업로드, 합성 샘플 로드, `Ds`, block size, CFA mode 선택, 한/영 토글, 카메라/CFA 정보, ratio curve, block heatmap을 제공합니다.
+GUI는 분석 도구가 첫 화면입니다. 이미지 업로드, RAW 업로드, 합성 샘플 로드, `Ds`, block size, CFA mode 선택, 한/영 토글, 카메라/CFA 정보, RAW Bayer 정보, ratio curve, block heatmap을 제공합니다. RAW 파일은 브라우저가 직접 표시할 수 없으므로, 서버가 `rawpy`로 develop한 RGB preview를 분석 후 표시합니다.
 
 ## 설치
 
@@ -106,12 +106,28 @@ npm run dev
 
 ## CLI 사용법
 
-단일 JPEG/PNG 이미지 분석:
+단일 JPEG/PNG/RAW 이미지 분석:
 
 ```powershell
 $env:PYTHONPATH="$PWD\backend"
 python backend\scripts\analyze_image_cli.py path\to\image.jpg
 ```
+
+RAW 파일을 넣으면 자동으로 `rawpy`로 RGB develop한 뒤 기존 AIVC 분석을 수행합니다.
+
+```powershell
+$env:PYTHONPATH="$PWD\backend"
+python backend\scripts\analyze_image_cli.py path\to\image.NEF --ds 10
+```
+
+이미지 기반 Bayer CFA pattern 자체를 따로 추정하려면 다음 CLI를 사용합니다.
+
+```powershell
+$env:PYTHONPATH="$PWD\backend"
+python backend\scripts\identify_cfa_cli.py path\to\image.NEF
+```
+
+이 출력은 EXIF/RAW metadata의 CFA 정보와 IVC 기반 Bayer pattern 예측값을 함께 보여줍니다.
 
 전체 JSON 출력:
 

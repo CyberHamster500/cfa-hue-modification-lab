@@ -128,6 +128,13 @@ h2 {
   overflow-wrap: anywhere;
 }
 
+.file-drop small {
+  max-width: 100%;
+  color: #6b7889;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
 .control-grid {
   display: grid;
   gap: 14px;

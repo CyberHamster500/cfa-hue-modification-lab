@@ -41,7 +41,7 @@ def _jpeg_roundtrip(rgb, quality: int):
 
 
 def _analyze(rgb, args: argparse.Namespace, preferred_mode: str | None) -> dict:
-    return analyze_image(
+    result = analyze_image(
         rgb,
         AnalysisOptions(
             ds=args.ds,
@@ -50,6 +50,9 @@ def _analyze(rgb, args: argparse.Namespace, preferred_mode: str | None) -> dict:
             preferred_cfa_green_mode=preferred_mode,  # type: ignore[arg-type]
         ),
     )
+    if args.mode == "AUTO" and preferred_mode:
+        result["options"]["cfa_resolution_source"] = "raw_pattern"
+    return result
 
 
 def _camera_from_raw(path: Path) -> dict[str, object]:
