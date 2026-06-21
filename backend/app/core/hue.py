@@ -9,6 +9,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 from app.core.camera_metadata import GreenMode
+from app.core.ivc import intermediate_value_counts
 
 CfaGreenMode = Literal["GXXG", "XGGX"]
 CfaGreenModeInput = Literal["AUTO", "GXXG", "XGGX"]
@@ -104,28 +105,7 @@ def shift_hue_hsi(rgb: np.ndarray, degrees: float) -> np.ndarray:
 
 
 def aivc_counts(channel: np.ndarray) -> np.ndarray:
-    values = channel.astype(np.float32)
-    counts = np.zeros((2, 2), dtype=np.int64)
-    if values.shape[0] < 3 or values.shape[1] < 3:
-        return counts
-
-    center = values[1:-1, 1:-1]
-    top = values[:-2, 1:-1]
-    bottom = values[2:, 1:-1]
-    left = values[1:-1, :-2]
-    right = values[1:-1, 2:]
-    min_cross = np.minimum.reduce([top, bottom, left, right])
-    max_cross = np.maximum.reduce([top, bottom, left, right])
-    not_intermediate = (center < min_cross) | (center > max_cross)
-
-    rows, cols = np.indices(center.shape)
-    rows += 1
-    cols += 1
-    for row_parity in (0, 1):
-        for col_parity in (0, 1):
-            mask = not_intermediate & ((rows % 2) == row_parity) & ((cols % 2) == col_parity)
-            counts[row_parity, col_parity] = int(mask.sum())
-    return counts
+    return intermediate_value_counts(channel)
 
 
 def channel_ratios(rgb: np.ndarray) -> dict[str, float]:

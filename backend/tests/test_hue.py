@@ -14,6 +14,7 @@ from app.core.hue import (
     generate_synthetic_sample,
     shift_hue_hsi,
 )
+from app.core.ivc import CHOI2011_CFA_IVC_DOI, intermediate_value_counts
 from app.main import app
 
 
@@ -30,6 +31,8 @@ def test_aivc_counts_reflect_checkerboard_positions() -> None:
     rows, cols = np.indices(channel.shape)
     channel[((rows % 2) == 0) & ((cols % 2) == 0)] = 240
     counts = aivc_counts(channel)
+    assert np.array_equal(counts, intermediate_value_counts(channel))
+    assert CHOI2011_CFA_IVC_DOI == "10.1145/2037252.2037258"
     assert counts[0, 0] > max(counts[0, 1], counts[1, 0], counts[1, 1])
 
 
